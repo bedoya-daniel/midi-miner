@@ -361,7 +361,7 @@ def moving_average(tension,window=4):
 
 
 
-def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name=''):
+def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True):
     try:
 
 
@@ -469,24 +469,8 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
 
         new_output_folder = os.path.dirname(output_name)
 
-        if not os.path.exists(new_output_folder):
-            os.makedirs(new_output_folder)
-
-        name_split = base_name.split('.')
-        pickle.dump(total_tension, open(os.path.join(new_output_folder,
-                                                     name_split[0] + '.tensile'),
-                                        'wb'))
-
-        pickle.dump(diameters, open(os.path.join(new_output_folder,
-                                                name_split[0] + '.diameter'),
-                                   'wb'))
-        pickle.dump(centroid_diff, open(os.path.join(new_output_folder,
-                                                name_split[0] + '.centroid_diff'),
-                                   'wb'))
-
-        pickle.dump(window_time[:len(total_tension)], open(os.path.join(new_output_folder,
-                                                     name_split[0] + '.time'),
-                                        'wb'))
+        if generate_pickle:
+            export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time)
         # draw_tension(total_tension,os.path.join(new_output_folder,
         #                                              base_name[:-4]+'_tensile_strain.png'))
         # draw_tension(diameters, os.path.join(new_output_folder,
@@ -500,6 +484,27 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
 
+
+def export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time):
+    if not os.path.exists(new_output_folder):
+        os.makedirs(new_output_folder)
+
+    name_split = base_name.split('.')
+    pickle.dump(total_tension, open(os.path.join(new_output_folder,
+                                                name_split[0] + '.tensile'),
+                                    'wb'))
+
+    pickle.dump(diameters, open(os.path.join(new_output_folder,
+                                            name_split[0] + '.diameter'),
+                            'wb'))
+    pickle.dump(centroid_diff, open(os.path.join(new_output_folder,
+                                            name_split[0] + '.centroid_diff'),
+                            'wb'))
+
+    pickle.dump(window_time[:len(total_tension)], open(os.path.join(new_output_folder,
+                                                name_split[0] + '.time'),
+                                    'wb'))
+    print('Exported tension to: ' + new_output_folder)
 
 def get_key_index_change(pm,start_time,sixteenth_time):
 
