@@ -361,7 +361,7 @@ def moving_average(tension,window=4):
 
 
 
-def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True):
+def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True, generate_plots=False):
     try:
 
 
@@ -471,12 +471,9 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
 
         if generate_pickle:
             export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time)
-        # draw_tension(total_tension,os.path.join(new_output_folder,
-        #                                              base_name[:-4]+'_tensile_strain.png'))
-        # draw_tension(diameters, os.path.join(new_output_folder,
-        #                                          base_name[:-4] + '_diameter.png'))
-        # draw_tension(centroid_diff, os.path.join(new_output_folder,
-        #                                      base_name[:-4] + '_centroid_diff.png'))
+
+        if generate_plots:
+            export_plots(new_output_folder, base_name, total_tension, diameters, centroid_diff)
 
         return [total_tension, diameters, centroid_diff, key_name,change_time,key_change_bar, changed_key_name, new_output_folder]
 
@@ -505,6 +502,15 @@ def export_tension(new_output_folder, total_tension, diameters, centroid_diff, w
                                                 name_split[0] + '.time'),
                                     'wb'))
     print('Exported tension to: ' + new_output_folder)
+
+def export_plots(new_output_folder, base_name, total_tension, diameters, centroid_diff):
+    draw_tension(total_tension,os.path.join(new_output_folder,
+                                                 base_name[:-4]+'_tensile_strain.png'))
+    draw_tension(diameters, os.path.join(new_output_folder,
+                                             base_name[:-4] + '_diameter.png'))
+    draw_tension(centroid_diff, os.path.join(new_output_folder,
+                                         base_name[:-4] + '_centroid_diff.png'))
+
 
 def get_key_index_change(pm,start_time,sixteenth_time):
 
@@ -616,22 +622,22 @@ def detect_key_change(key_diff,diameter,start_ratio=0.5):
     return key_diff_change_bar + 12 if key_diff_change_bar != -1 else key_diff_change_bar
 
 
-# def draw_tension(values,file_name):
-#     plt.style.use('ggplot')
-#     plt.rcParams['xtick.labelsize'] = 6
-#     plt.figure()
-#     F = plt.gcf()
-#     F.set_size_inches(len(values)/7+5, 5)
-#     xtick = range(1,len(values) + 1)
-#     if isinstance(values,list):
-#         values = np.array(values)
-#
-#     plt.xticks(xtick)
-#
-#     # plt.ylim(0, 1)
-#     plt.plot(xtick, values,marker='o')
-#     plt.savefig(file_name)
-#     plt.close('all')
+def draw_tension(values,file_name):
+    plt.style.use('ggplot')
+    plt.rcParams['xtick.labelsize'] = 6
+    plt.figure()
+    F = plt.gcf()
+    F.set_size_inches(len(values)/7+5, 5)
+    xtick = range(1,len(values) + 1)
+    if isinstance(values,list):
+        values = np.array(values)
+
+    plt.xticks(xtick)
+
+    # plt.ylim(0, 1)
+    plt.plot(xtick, values,marker='o')
+    plt.savefig(file_name)
+    plt.close('all')
 
 
 def remove_drum_track(pm):
