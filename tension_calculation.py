@@ -362,9 +362,8 @@ def moving_average(tension,window=4):
 
 
 def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True, generate_plots=False):
+
     try:
-
-
         base_name = os.path.basename(file_name)
 
         # all the major key pos is C major pos, all the minor key pos is a minor pos
@@ -373,56 +372,9 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         # bar_step = downbeat_indices[1] - downbeat_indices[0]
         centroids = cal_centroid(piano_roll, note_shift,-1,-1)
 
-
-        if args.key_changed is True:
-            # use a bar window to detect key change
-            merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices,window_size=-1)
-
-            silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
-            merged_centroids = np.array(merged_centroids)
-
-            key_diff = merged_centroids - key_pos
-            key_diff = np.linalg.norm(key_diff, axis=-1)
-
-            key_diff[silent] = 0
-
-            diameters = cal_diameter(piano_roll, note_shift, -1, -1)
-            diameters = merge_tension(diameters, beat_indices, down_beat_indices,window_size=-1)
-            #
-
-            key_change_bar = detect_key_change(key_diff,diameters,start_ratio=args.end_ratio)
-            if key_change_bar != -1:
-                key_change_beat = np.argwhere(beat_time == down_beat_time[key_change_bar])[0][0]
-                change_time = down_beat_time[key_change_bar]
-                changed_key_name, changed_key_pos, changed_note_shift = get_key_index_change(pm, change_time,sixteenth_time)
-                if changed_key_name != key_name:
-                    m = int(change_time // 60)
-                    s = int(change_time % 60)
-
-                    logger.info(f'key changed, change time is {m} minutes, {s} second')
-
-                    logger.info(f'new note shift is {changed_note_shift}')
-                else:
-                    changed_note_shift = -1
-                    changed_key_name = ''
-                    key_change_beat = -1
-                    change_time = -1
-                    key_change_bar = -1
-
-            else:
-                changed_note_shift = -1
-                changed_key_name = ''
-                key_change_beat = -1
-                change_time = -1
-                # diameters = diameter(chord, key_index, key_change_bar, key_index)
-        else:
-            changed_note_shift = -1
-            changed_key_name = ''
-            key_change_beat = -1
-            change_time = -1
-            key_change_bar = -1
-
-        centroids = cal_centroid(piano_roll, note_shift,key_change_beat,changed_note_shift)
+        kc = windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_roll, note_shift, args)
+        
+        centroids = cal_centroid(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
 
         merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices, window_size=window_size)
         merged_centroids = np.array(merged_centroids)
@@ -433,21 +385,21 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
             window_time = beat_time[::window_size]
         silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
 
-        if key_change_beat != -1:
+        if kc['key_change_beat'] != -1:
             key_diff = np.zeros(merged_centroids.shape[0])
-            changed_step = int(key_change_beat / abs(window_size))
+            changed_step = int(kc['key_change_beat'] / abs(window_size))
             for step in range(merged_centroids.shape[0]):
                 if step < changed_step:
                     key_diff[step] = np.linalg.norm(merged_centroids[step] - key_pos)
                 else:
-                    key_diff[step] = np.linalg.norm(merged_centroids[step] - changed_key_pos)
+                    key_diff[step] = np.linalg.norm(merged_centroids[step] - kc['changed_key_pos'])
         else:
             key_diff = np.linalg.norm(merged_centroids - key_pos,axis=-1)
 
 
         key_diff[silent] = 0
 
-        diameters = cal_diameter(piano_roll, note_shift,key_change_beat,changed_note_shift)
+        diameters = cal_diameter(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
         diameters = merge_tension(diameters, beat_indices, down_beat_indices, window_size)
         #
 
@@ -475,12 +427,70 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         if generate_plots:
             export_plots(new_output_folder, base_name, total_tension, diameters, centroid_diff)
 
-        return [total_tension, diameters, centroid_diff, key_name,change_time,key_change_bar, changed_key_name, new_output_folder]
+        return [total_tension, diameters, centroid_diff, key_name,kc['change_time'],kc['key_change_bar'], kc['changed_key_name'], new_output_folder]
 
     except (ValueError, EOFError, IndexError, OSError, KeyError, ZeroDivisionError) as e:
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
 
+
+def windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_roll, note_shift, args):
+
+    if args.key_changed is True:
+        # use a bar window to detect key change
+        merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices,window_size=-1)
+
+        silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
+        merged_centroids = np.array(merged_centroids)
+
+        key_diff = merged_centroids - key_pos
+        key_diff = np.linalg.norm(key_diff, axis=-1)
+
+        key_diff[silent] = 0
+
+        diameters = cal_diameter(piano_roll, note_shift, -1, -1)
+        diameters = merge_tension(diameters, beat_indices, down_beat_indices,window_size=-1)
+
+        key_change_bar = detect_key_change(key_diff,diameters,start_ratio=args.end_ratio)
+        if key_change_bar != -1:
+            key_change_beat = np.argwhere(beat_time == down_beat_time[key_change_bar])[0][0]
+            change_time = down_beat_time[key_change_bar]
+            changed_key_name, changed_key_pos, changed_note_shift = get_key_index_change(pm, change_time,sixteenth_time)
+            if changed_key_name != key_name:
+                m = int(change_time // 60)
+                s = int(change_time % 60)
+
+                logger.info(f'key changed, change time is {m} minutes, {s} second')
+
+                logger.info(f'new note shift is {changed_note_shift}')
+            else:
+                changed_note_shift = -1
+                changed_key_name = ''
+                key_change_beat = -1
+                change_time = -1
+                key_change_bar = -1
+
+        else:
+            changed_note_shift = -1
+            changed_key_pos = ''
+            changed_key_name = ''
+            key_change_beat = -1
+            change_time = -1
+            # diameters = diameter(chord, key_index, key_change_bar, key_index)
+    else:
+        changed_note_shift = -1
+        changed_key_pos = ''
+        changed_key_name = ''
+        key_change_beat = -1
+        change_time = -1
+        key_change_bar = -1
+    key_change_params = {'changed_note_shift':changed_note_shift,
+                        'changed_key_pos':changed_key_pos,
+                        'changed_key_name':changed_key_name,
+                        'key_change_beat':key_change_beat,
+                        'change_time' : change_time,
+                        'key_change_bar':key_change_bar}
+    return key_change_params
 
 def export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time):
     if not os.path.exists(new_output_folder):
