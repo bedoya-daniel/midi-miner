@@ -379,39 +379,16 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices, window_size=window_size)
         merged_centroids = np.array(merged_centroids)
 
-        if window_size == -1:
-            window_time = down_beat_time
-        else:
-            window_time = beat_time[::window_size]
-        silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
-
-        if kc['key_change_beat'] != -1:
-            key_diff = np.zeros(merged_centroids.shape[0])
-            changed_step = int(kc['key_change_beat'] / abs(window_size))
-            for step in range(merged_centroids.shape[0]):
-                if step < changed_step:
-                    key_diff[step] = np.linalg.norm(merged_centroids[step] - key_pos)
-                else:
-                    key_diff[step] = np.linalg.norm(merged_centroids[step] - kc['changed_key_pos'])
-        else:
-            key_diff = np.linalg.norm(merged_centroids - key_pos,axis=-1)
-
-
-        key_diff[silent] = 0
+        window_time, total_tension = cal_key_diff(window_size, merged_centroids, key_pos, kc)
 
         diameters = cal_diameter(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
         diameters = merge_tension(diameters, beat_indices, down_beat_indices, window_size)
-        #
 
         centroid_diff = np.diff(merged_centroids, axis=0)
-        #
         np.nan_to_num(centroid_diff, copy=False)
 
         centroid_diff = np.linalg.norm(centroid_diff, axis=-1)
         centroid_diff = np.insert(centroid_diff, 0, 0)
-
-
-        total_tension = key_diff
 
         if args.input_folder[-1] != '/':
             args.input_folder += '/'
@@ -433,6 +410,27 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
 
+def cal_key_diff(window_size, merged_centroids, key_pos, kc):
+
+    if window_size == -1:
+        window_time = down_beat_time
+    else:
+        window_time = beat_time[::window_size]
+    silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
+
+    if kc['key_change_beat'] != -1:
+        key_diff = np.zeros(merged_centroids.shape[0])
+        changed_step = int(kc['key_change_beat'] / abs(window_size))
+        for step in range(merged_centroids.shape[0]):
+            if step < changed_step:
+                key_diff[step] = np.linalg.norm(merged_centroids[step] - key_pos)
+            else:
+                key_diff[step] = np.linalg.norm(merged_centroids[step] - kc['changed_key_pos'])
+    else:
+        key_diff = np.linalg.norm(merged_centroids - key_pos,axis=-1)
+
+    key_diff[silent] = 0
+    return window_time, key_diff
 
 def windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_roll, note_shift, args):
 
