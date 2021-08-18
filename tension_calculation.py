@@ -377,6 +377,7 @@ def cal_tension(file_name, piano_roll, beat_data, args, window_size=1, key_name=
         merged_centroids = np.array(merged_centroids)
 
         window_time, total_tension = cal_key_diff(beat_data, window_size, merged_centroids, key_pos, kc)
+        tension_time = window_time[:len(total_tension)]
 
         diameters = cal_diameter(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
         diameters = merge_tension(diameters, beat_data['beat_indices'], beat_data['down_beat_indices'], window_size)
@@ -395,7 +396,7 @@ def cal_tension(file_name, piano_roll, beat_data, args, window_size=1, key_name=
         if generate_plots:
             export_plots(new_output_folder, file_name, total_tension, diameters, centroid_diff)
 
-        return [total_tension, diameters, centroid_diff, key_name,kc['change_time'],kc['key_change_bar'], kc['changed_key_name'], new_output_folder]
+        return [tension_time, total_tension, diameters, centroid_diff, key_name,kc['change_time'],kc['key_change_bar'], kc['changed_key_name'], new_output_folder]
 
     except (ValueError, EOFError, IndexError, OSError, KeyError, ZeroDivisionError) as e:
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
@@ -942,8 +943,7 @@ if __name__== "__main__":
             else:
                 tension_result = cal_tension(file_name, piano_roll, beat_data, args, args.window_size,[args.key_name])
 
-
-            total_tension, diameters,centroid_diff, key_name, key_change_time, key_change_bar,key_change_name, new_output_folder = tension_result
+            window_time, total_tension, diameters,centroid_diff, key_name, key_change_time, key_change_bar,key_change_name, new_output_folder = tension_result
 
             if np.count_nonzero(total_tension) == 0:
                 logger.info(f"tensile 0 skip {file_name}")
