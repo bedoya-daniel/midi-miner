@@ -724,18 +724,17 @@ def extract_notes(file_name,track_num):
         sixteenth_time, beat_time,down_beat_time,beat_indices,down_beat_indices = get_beat_time(pm, beat_division=4)
 
         piano_roll = get_piano_roll(pm, sixteenth_time)
-
+        beat_data = {'sixteenth_time': sixteenth_time,
+                    'beat_time': beat_time,
+                    'down_beat_time': down_beat_time,
+                    'beat_indices': beat_indices,
+                    'down_beat_indices': down_beat_indices
+                }
     except (ValueError, EOFError, IndexError, OSError, KeyError, ZeroDivisionError) as e:
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
         return None
 
-    beat_data = {'sixteenth_time': sixteenth_time,
-                'beat_time': beat_time,
-                'down_beat_time': down_beat_time,
-                'beat_indices': beat_indices,
-                'down_beat_indices': down_beat_indices
-            }
     return [pm,piano_roll,beat_data]
 
 def walk(folder_name):
