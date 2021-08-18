@@ -364,10 +364,7 @@ def moving_average(tension,window=4):
 def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True, generate_plots=False):
 
     try:
-        base_name = os.path.basename(file_name)
-
         # all the major key pos is C major pos, all the minor key pos is a minor pos
-
         key_name,key_pos, note_shift = cal_key(piano_roll, key_name,end_ratio=args.end_ratio)
         # bar_step = downbeat_indices[1] - downbeat_indices[0]
         centroids = cal_centroid(piano_roll, note_shift,-1,-1)
@@ -390,25 +387,30 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         centroid_diff = np.linalg.norm(centroid_diff, axis=-1)
         centroid_diff = np.insert(centroid_diff, 0, 0)
 
-        if args.input_folder[-1] != '/':
-            args.input_folder += '/'
-        name_with_sub_folder = file_name.replace(args.input_folder, "")
-
-        output_name = os.path.join(output_folder, name_with_sub_folder)
-
-        new_output_folder = os.path.dirname(output_name)
+        new_output_folder = gen_new_output_folder(file_name, output_folder, args)
 
         if generate_pickle:
             export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time)
 
         if generate_plots:
-            export_plots(new_output_folder, base_name, total_tension, diameters, centroid_diff)
+            export_plots(new_output_folder, file_name, total_tension, diameters, centroid_diff)
 
         return [total_tension, diameters, centroid_diff, key_name,kc['change_time'],kc['key_change_bar'], kc['changed_key_name'], new_output_folder]
 
     except (ValueError, EOFError, IndexError, OSError, KeyError, ZeroDivisionError) as e:
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
+
+def gen_new_output_folder(file_name, output_folder, args):
+
+    if args.input_folder[-1] != '/':
+        args.input_folder += '/'
+    name_with_sub_folder = file_name.replace(args.input_folder, "")
+
+    output_name = os.path.join(output_folder, name_with_sub_folder)
+
+    new_output_folder = os.path.dirname(output_name)
+    return new_output_folder
 
 def cal_key_diff(window_size, merged_centroids, key_pos, kc):
 
@@ -511,7 +513,8 @@ def export_tension(new_output_folder, total_tension, diameters, centroid_diff, w
                                     'wb'))
     print('Exported tension to: ' + new_output_folder)
 
-def export_plots(new_output_folder, base_name, total_tension, diameters, centroid_diff):
+def export_plots(new_output_folder, file_name, total_tension, diameters, centroid_diff):
+    base_name = os.path.basename(file_name)
     draw_tension(total_tension,os.path.join(new_output_folder,
                                                  base_name[:-4]+'_tensile_strain.png'))
     draw_tension(diameters, os.path.join(new_output_folder,
