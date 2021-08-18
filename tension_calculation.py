@@ -361,7 +361,7 @@ def moving_average(tension,window=4):
 
 
 
-def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, output_folder, window_size=1, key_name='', generate_pickle=True, generate_plots=False):
+def cal_tension(file_name, piano_roll, beat_data, args, window_size=1, key_name='', generate_pickle=True, generate_plots=False):
 
     try:
         # all the major key pos is C major pos, all the minor key pos is a minor pos
@@ -369,17 +369,17 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         # bar_step = downbeat_indices[1] - downbeat_indices[0]
         centroids = cal_centroid(piano_roll, note_shift,-1,-1)
 
-        kc = windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_roll, note_shift, args)
+        kc = windowDetectKey(beat_data, centroids, key_pos, piano_roll, note_shift, args)
         
         centroids = cal_centroid(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
 
-        merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices, window_size=window_size)
+        merged_centroids = merge_tension(centroids,beat_data['beat_indices'], beat_data['down_beat_indices'], window_size=window_size)
         merged_centroids = np.array(merged_centroids)
 
-        window_time, total_tension = cal_key_diff(window_size, merged_centroids, key_pos, kc)
+        window_time, total_tension = cal_key_diff(beat_data, window_size, merged_centroids, key_pos, kc)
 
         diameters = cal_diameter(piano_roll, note_shift,kc['key_change_beat'],kc['changed_note_shift'])
-        diameters = merge_tension(diameters, beat_indices, down_beat_indices, window_size)
+        diameters = merge_tension(diameters, beat_data['beat_indices'], beat_data['down_beat_indices'], window_size)
 
         centroid_diff = np.diff(merged_centroids, axis=0)
         np.nan_to_num(centroid_diff, copy=False)
@@ -387,10 +387,10 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         centroid_diff = np.linalg.norm(centroid_diff, axis=-1)
         centroid_diff = np.insert(centroid_diff, 0, 0)
 
-        new_output_folder = gen_new_output_folder(file_name, output_folder, args)
+        new_output_folder = gen_new_output_folder(file_name, args)
 
         if generate_pickle:
-            export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time)
+            export_tension(new_output_folder, file_name, total_tension, diameters, centroid_diff, window_time)
 
         if generate_plots:
             export_plots(new_output_folder, file_name, total_tension, diameters, centroid_diff)
@@ -401,22 +401,23 @@ def cal_tension(file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down
         exception_str = 'Unexpected error in ' + file_name + ':\n', e, sys.exc_info()[0]
         logger.info(exception_str)
 
-def gen_new_output_folder(file_name, output_folder, args):
+def gen_new_output_folder(file_name, args):
 
     if args.input_folder[-1] != '/':
         args.input_folder += '/'
     name_with_sub_folder = file_name.replace(args.input_folder, "")
 
-    output_name = os.path.join(output_folder, name_with_sub_folder)
+    output_name = os.path.join(args.output_folder, name_with_sub_folder)
 
     new_output_folder = os.path.dirname(output_name)
     return new_output_folder
 
-def cal_key_diff(window_size, merged_centroids, key_pos, kc):
+def cal_key_diff(beat_data, window_size, merged_centroids, key_pos, kc):
 
     if window_size == -1:
-        window_time = down_beat_time
+        window_time = beat_data['down_beat_time']
     else:
+        beat_time = beat_data['beat_time']
         window_time = beat_time[::window_size]
     silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
 
@@ -434,11 +435,17 @@ def cal_key_diff(window_size, merged_centroids, key_pos, kc):
     key_diff[silent] = 0
     return window_time, key_diff
 
-def windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_roll, note_shift, args):
+def windowDetectKey(beat_data, centroids, key_pos, piano_roll, note_shift, args):
+
+    beat_indices = beat_data['beat_indices']
+    down_beat_indices = beat_data['down_beat_indices']
+    beat_time = beat_data['beat_time']
+    down_beat_time = beat_data['down_beat_time']
+    sixteenth_time = beat_data['sixteenth_time']
 
     if args.key_changed is True:
         # use a bar window to detect key change
-        merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices,window_size=-1)
+        merged_centroids = merge_tension(centroids,beat_indices, down_beat_indices, window_size=-1)
 
         silent = np.where(np.linalg.norm(merged_centroids, axis=-1) == 0)
         merged_centroids = np.array(merged_centroids)
@@ -492,10 +499,10 @@ def windowDetectKey(centroids, beat_indices, down_beat_indices, key_pos, piano_r
                         'key_change_bar':key_change_bar}
     return key_change_params
 
-def export_tension(new_output_folder, total_tension, diameters, centroid_diff, window_time):
+def export_tension(new_output_folder, file_name, total_tension, diameters, centroid_diff, window_time):
     if not os.path.exists(new_output_folder):
         os.makedirs(new_output_folder)
-
+    base_name = os.path.basename(file_name)
     name_split = base_name.split('.')
     pickle.dump(total_tension, open(os.path.join(new_output_folder,
                                                 name_split[0] + '.tensile'),
@@ -722,7 +729,13 @@ def extract_notes(file_name,track_num):
         logger.info(exception_str)
         return None
 
-    return [pm,piano_roll,sixteenth_time,beat_time,down_beat_time,beat_indices,down_beat_indices]
+    beat_data = {'sixteenth_time': sixteenth_time,
+                'beat_time': beat_time,
+                'down_beat_time': down_beat_time,
+                'beat_indices': beat_indices,
+                'down_beat_indices': down_beat_indices
+            }
+    return [pm,piano_roll,beat_data]
 
 def walk(folder_name):
     files = []
@@ -912,27 +925,25 @@ if __name__== "__main__":
 
 
         # logger.info(f'working on {file_name}')
-        result = extract_notes(file_name,args.track_num)
+        pm,piano_roll,beat_data = extract_notes(file_name,args.track_num)
 
-        if result is None:
-            continue
-        else:
-            pm,piano_roll,sixteenth_time,beat_time,down_beat_time,beat_indices,down_beat_indices = result
+        # if result is None:
+        #     continue
+        # else:
+            # pm,piano_roll,sixteenth_time,beat_time,down_beat_time,beat_indices,down_beat_indices = result
 
         try:
+
             if args.key_name == '':
                 # key_name = get_key_name(file_name)
                 key_name = all_key_names
-
-                result = cal_tension(
-                    file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, args.output_folder, args.window_size,key_name)
+                tension_result = cal_tension(file_name, piano_roll, beat_data, args, args.window_size, key_name)
 
             else:
-                result = cal_tension(
-                    file_name, piano_roll,sixteenth_time,beat_time,beat_indices,down_beat_time,down_beat_indices, args.output_folder, args.window_size,[args.key_name])
+                tension_result = cal_tension(file_name, piano_roll, beat_data, args, args.window_size,[args.key_name])
 
 
-            total_tension, diameters,centroid_diff, key_name, key_change_time, key_change_bar,key_change_name, new_output_foler = result
+            total_tension, diameters,centroid_diff, key_name, key_change_time, key_change_bar,key_change_name, new_output_folder = tension_result
 
             if np.count_nonzero(total_tension) == 0:
                 logger.info(f"tensile 0 skip {file_name}")
@@ -949,11 +960,11 @@ if __name__== "__main__":
             logger.info(exception_str)
 
         if key_name is not None:
-            files_result[new_output_foler + '/' + base_name] = []
-            files_result[new_output_foler + '/' + base_name].append(key_name)
-            files_result[new_output_foler + '/' + base_name].append(int(key_change_time))
-            files_result[new_output_foler + '/' + base_name].append(int(key_change_bar))
-            files_result[new_output_foler + '/' + base_name].append(key_change_name)
+            files_result[new_output_folder + '/' + base_name] = []
+            files_result[new_output_folder + '/' + base_name].append(key_name)
+            files_result[new_output_folder + '/' + base_name].append(int(key_change_time))
+            files_result[new_output_folder + '/' + base_name].append(int(key_change_bar))
+            files_result[new_output_folder + '/' + base_name].append(key_change_name)
 
         else:
             logger.info(f'cannot find the key of song {file_name}, skip this file')
